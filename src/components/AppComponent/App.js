@@ -1,8 +1,11 @@
 import React from 'react'
+import Timer from '../../pages/Timer/Timer'
 
 function App() {
   return (
-    <div>App</div>
+    <div className='app'>
+    < Timer />
+    </div>
   )
 }
 

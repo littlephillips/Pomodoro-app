@@ -1,21 +1,23 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import TimerControls from '../TimerControls/TimerControls';
+import TaskList from '../TaskList/TaskList';
+import TimerDisplay from '../TimerDisplay/TimerDisplay';
+import NotificationButton from '../NotificationButton/NotificationButton';
 import alarmSound from '../../assests/alarmSound.wav';
-
-// style
-import '../../styles/Timer.css'; 
+import '../../styles/Timer.css';
 
 const Timer = () => {
-  const [workTime, setWorkTime] = useState(25);
-  const [breakTime, setBreakTime] = useState(5);
-  const [longBreakTime, setLongBreakTime] = useState(15);
+  const [workTime, setWorkTime] = useState(1);
+  const [breakTime, setBreakTime] = useState();
+  const [longBreakTime, setLongBreakTime] = useState(1);
   const [workSessions, setWorkSessions] = useState(0);
   const [isWorking, setIsWorking] = useState(true);
   const [isActive, setIsActive] = useState(false);
-  const [timeLeft, setTimeLeft] = useState(workTime * 60);
   const [tasks, setTasks] = useState([]);
   const [offline, setOffline] = useState(false);
   const [notificationPermission, setNotificationPermission] = useState('default');
-  const audioRef = React.createRef();
+  const [timeLeft, setTimeLeft] = useState(workTime * 60);
+  const audioRef = useRef();
 
   useEffect(() => {
     const handleNotificationPermission = () => {
@@ -23,9 +25,68 @@ const Timer = () => {
         setNotificationPermission(Notification.permission);
       }
     };
-
     handleNotificationPermission();
   }, []);
+
+  useEffect(() => {
+    const handleOffline = () => {
+      setOffline(!navigator.onLine);
+    };
+    window.addEventListener('offline', handleOffline);
+    window.addEventListener('online', handleOffline);
+    return () => {
+      window.removeEventListener('offline', handleOffline);
+      window.removeEventListener('online', handleOffline);
+    };
+  }, []);
+
+  useEffect(() => {
+    audioRef.current.addEventListener('error', event => {
+      console.error('Audio playback error:', event);
+    });
+  }, []);
+
+  useEffect(() => {
+    let interval;
+
+    if (isActive) {
+      interval = setInterval(() => {
+        setTimeLeft(prevTime => {
+          let nextTimeLeft = 0;
+          if (prevTime > 0) {
+            nextTimeLeft = prevTime - 1;
+          } else {
+            audioRef.current.play();
+            const newIsWorking = !isWorking;
+            setIsWorking(newIsWorking);
+            nextTimeLeft = newIsWorking ? breakTime * 60 : workTime * 60;
+            setTasks(prevTasks => [...prevTasks, newIsWorking ? 'Work' : 'Break']);
+            if (!newIsWorking) {
+              setWorkSessions(workSessions => workSessions + 1);
+              if ((workSessions + 1) % 4 === 0) {
+                nextTimeLeft = longBreakTime * 60;
+                setTasks(prevTasks => [...prevTasks, 'Long Break']);
+              }
+            }
+          }
+          return nextTimeLeft;
+        });
+      }, 1000);
+    } else {
+      clearInterval(interval);
+    }
+  
+    return () => clearInterval(interval);
+  }, [isActive, isWorking, workTime, breakTime, longBreakTime, audioRef]);
+  
+
+  const formatTime = seconds => {
+    const minutes = Math.floor(seconds / 60);
+    const formattedMinutes = String(minutes).padStart(2, '0');
+    const formattedSeconds = String(seconds % 60).padStart(2, '0');
+    return `${formattedMinutes}:${formattedSeconds}`;
+  };
+  
 
   const requestNotificationPermission = () => {
     if ('Notification' in window) {
@@ -35,84 +96,24 @@ const Timer = () => {
     }
   };
 
-  useEffect(() => {
-    let interval;
-
-    if (isActive && timeLeft > 0) {
-      interval = setInterval(() => {
-        setTimeLeft(prevTime => prevTime - 1);
-      }, 1000);
-    } else if (isActive && timeLeft === 0) {
-      audioRef.current.play();
-      setIsWorking(prevIsWorking => !prevIsWorking);
-      setTimeLeft(isWorking ? breakTime * 60 : workTime * 60);
-      setTasks(prevTasks => [...prevTasks, isWorking ? 'Work' : 'Break']);
-      if (isWorking) {
-        setWorkSessions(prevSessions => prevSessions + 1);
-      }
-      if (workSessions > 0 && workSessions % 4 === 0) {
-        setTimeLeft(longBreakTime * 60);
-        setIsWorking(false);
-        setTasks(prevTasks => [...prevTasks, 'Long Break']);
-      }
-    }
-
-    return () => clearInterval(interval);
-  }, [isActive, timeLeft, workTime, breakTime, longBreakTime, isWorking, workSessions, audioRef]);
-
-  const formatTime = seconds => {
-    const minutes = Math.floor(seconds / 60);
-    const formattedMinutes = String(minutes).padStart(2, '0');
-    const formattedSeconds = String(seconds % 60).padStart(2, '0');
-    return `${formattedMinutes}:${formattedSeconds}`;
-  };
-
-  useEffect(() => {
-    const handleOffline = () => {
-      setOffline(!navigator.onLine);
-    };
-
-    window.addEventListener('offline', handleOffline);
-    window.addEventListener('online', handleOffline);
-
-    return () => {
-      window.removeEventListener('offline', handleOffline);
-      window.removeEventListener('online', handleOffline);
-    };
-  }, []);
-
-  useEffect(() => {
-    if (isActive && timeLeft === 5) {
-      if (notificationPermission === 'granted') {
-        new Notification(`Next ${isWorking ? 'Break' : 'Work'} starts in 5 seconds!`);
-      }
-    }
-  }, [isActive, timeLeft, isWorking, notificationPermission]);
-
   return (
     <div className={`timer ${offline ? 'offline' : ''}`}>
       <h1>{isWorking ? 'Work' : 'Break'} Timer</h1>
-      <div className="time">{formatTime(timeLeft)}</div>
-      <div className="controls">
-        <button onClick={() => setIsActive(!isActive)}>
-          {isActive ? 'Pause' : 'Start'}
-        </button>
-        <button onClick={() => setTimeLeft(isWorking ? workTime * 60 : breakTime * 60)}>
-          Reset
-        </button>
-      </div>
-      <div className="task-list">
-        <h2>Task List</h2>
-        <ul>
-          {tasks.map((task, index) => (
-            <li key={index}>{task}</li>
-          ))}
-        </ul>
-      </div>
+      <TimerDisplay timeLeft={timeLeft} formatTime={formatTime} />
+      <TimerControls
+        isActive={isActive}
+        setIsActive={setIsActive}
+        isWorking={isWorking}
+        workTime={workTime}
+        breakTime={breakTime}
+        setWorkSessions={setWorkSessions}
+        setTimeLeft={setTimeLeft}
+      />
+      <TaskList tasks={tasks} />
       <audio ref={audioRef} src={alarmSound}></audio>
-      <button onClick={requestNotificationPermission}>
-        Request Notification Permission
-      </button>
+      {('Notification' in window) && notificationPermission !== 'granted' && (
+        <NotificationButton requestNotificationPermission={requestNotificationPermission} />
+      )}
     </div>
   );
 };

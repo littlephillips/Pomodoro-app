@@ -1,9 +1,8 @@
-// Timer.js
 import React, { useState, useEffect } from 'react';
-import alarmSound from '../../assests/alarmSound.wav'; 
+import alarmSound from '../../assests/alarmSound.wav';
 
 // style
-import '../../styles/Timer.css';
+import '../../styles/Timer.css'; 
 
 const Timer = () => {
   const [workTime, setWorkTime] = useState(25);
@@ -15,7 +14,26 @@ const Timer = () => {
   const [timeLeft, setTimeLeft] = useState(workTime * 60);
   const [tasks, setTasks] = useState([]);
   const [offline, setOffline] = useState(false);
+  const [notificationPermission, setNotificationPermission] = useState('default');
   const audioRef = React.createRef();
+
+  useEffect(() => {
+    const handleNotificationPermission = () => {
+      if ('Notification' in window) {
+        setNotificationPermission(Notification.permission);
+      }
+    };
+
+    handleNotificationPermission();
+  }, []);
+
+  const requestNotificationPermission = () => {
+    if ('Notification' in window) {
+      Notification.requestPermission().then(permission => {
+        setNotificationPermission(permission);
+      });
+    }
+  };
 
   useEffect(() => {
     let interval;
@@ -42,7 +60,6 @@ const Timer = () => {
     return () => clearInterval(interval);
   }, [isActive, timeLeft, workTime, breakTime, longBreakTime, isWorking, workSessions, audioRef]);
 
-
   const formatTime = seconds => {
     const minutes = Math.floor(seconds / 60);
     const formattedMinutes = String(minutes).padStart(2, '0');
@@ -64,9 +81,17 @@ const Timer = () => {
     };
   }, []);
 
+  useEffect(() => {
+    if (isActive && timeLeft === 5) {
+      if (notificationPermission === 'granted') {
+        new Notification(`Next ${isWorking ? 'Break' : 'Work'} starts in 5 seconds!`);
+      }
+    }
+  }, [isActive, timeLeft, isWorking, notificationPermission]);
+
   return (
-  <div className={`timer ${offline ? 'offline' : ''}`}>
-        <h1>{isWorking ? 'Work' : 'Break'} Timer</h1>
+    <div className={`timer ${offline ? 'offline' : ''}`}>
+      <h1>{isWorking ? 'Work' : 'Break'} Timer</h1>
       <div className="time">{formatTime(timeLeft)}</div>
       <div className="controls">
         <button onClick={() => setIsActive(!isActive)}>
@@ -85,6 +110,9 @@ const Timer = () => {
         </ul>
       </div>
       <audio ref={audioRef} src={alarmSound}></audio>
+      <button onClick={requestNotificationPermission}>
+        Request Notification Permission
+      </button>
     </div>
   );
 };

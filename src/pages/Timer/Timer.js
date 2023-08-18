@@ -5,15 +5,16 @@ import alarmSound from '../../assests/alarmSound.wav';
 // style
 import '../../styles/Timer.css';
 
-
-
 const Timer = () => {
-  const [workTime, setWorkTime] = useState(1);
-  const [breakTime, setBreakTime] = useState(1);
+  const [workTime, setWorkTime] = useState(25);
+  const [breakTime, setBreakTime] = useState(5);
+  const [longBreakTime, setLongBreakTime] = useState(15);
+  const [workSessions, setWorkSessions] = useState(0);
   const [isWorking, setIsWorking] = useState(true);
   const [isActive, setIsActive] = useState(false);
   const [timeLeft, setTimeLeft] = useState(workTime * 60);
   const [tasks, setTasks] = useState([]);
+  const [offline, setOffline] = useState(false);
   const audioRef = React.createRef();
 
   useEffect(() => {
@@ -24,14 +25,23 @@ const Timer = () => {
         setTimeLeft(prevTime => prevTime - 1);
       }, 1000);
     } else if (isActive && timeLeft === 0) {
-      audioRef.current.play(); // Play notification sound
+      audioRef.current.play();
       setIsWorking(prevIsWorking => !prevIsWorking);
       setTimeLeft(isWorking ? breakTime * 60 : workTime * 60);
       setTasks(prevTasks => [...prevTasks, isWorking ? 'Work' : 'Break']);
+      if (isWorking) {
+        setWorkSessions(prevSessions => prevSessions + 1);
+      }
+      if (workSessions > 0 && workSessions % 4 === 0) {
+        setTimeLeft(longBreakTime * 60);
+        setIsWorking(false);
+        setTasks(prevTasks => [...prevTasks, 'Long Break']);
+      }
     }
 
     return () => clearInterval(interval);
-  }, [isActive, timeLeft, workTime, breakTime, isWorking, audioRef]);
+  }, [isActive, timeLeft, workTime, breakTime, longBreakTime, isWorking, workSessions, audioRef]);
+
 
   const formatTime = seconds => {
     const minutes = Math.floor(seconds / 60);
@@ -40,9 +50,23 @@ const Timer = () => {
     return `${formattedMinutes}:${formattedSeconds}`;
   };
 
+  useEffect(() => {
+    const handleOffline = () => {
+      setOffline(!navigator.onLine);
+    };
+
+    window.addEventListener('offline', handleOffline);
+    window.addEventListener('online', handleOffline);
+
+    return () => {
+      window.removeEventListener('offline', handleOffline);
+      window.removeEventListener('online', handleOffline);
+    };
+  }, []);
+
   return (
-    <div className="timer">
-      <h1>{isWorking ? 'Work' : 'Break'} Timer</h1>
+  <div className={`timer ${offline ? 'offline' : ''}`}>
+        <h1>{isWorking ? 'Work' : 'Break'} Timer</h1>
       <div className="time">{formatTime(timeLeft)}</div>
       <div className="controls">
         <button onClick={() => setIsActive(!isActive)}>
